@@ -1,0 +1,8 @@
+{
+  "name": "국선변호사 수준 무료 법률 15개국어",
+  "description": "AI-powered free legal consultation platform supporting 15 languages. Multimodal chat, document generation, and lawyer matching for legal accessibility.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
