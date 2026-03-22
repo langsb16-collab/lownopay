@@ -5,7 +5,7 @@
 
 import { useState } from "react";
 import { translations, faqData } from "./i18n";
-import { analyzeLegalCase } from "./services/geminiService";
+import { analyzeLegalCase, chatWithAI } from "./services/geminiService";
 import { 
   Scale, 
   MessageSquare, 
@@ -30,6 +30,9 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(false);
   const [faqOpen, setFaqOpen] = useState(false);
   const [files, setFiles] = useState<{ data: string, mimeType: string, name: string }[]>([]);
+  const [messages, setMessages] = useState<{ role: "user" | "ai", text: string }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
   
   const t = (key: string) => translations[lang]?.[key] || translations["en"][key] || key;
 
@@ -62,6 +65,29 @@ export default function App() {
     }
   };
 
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+
+    const userMsg = chatInput;
+    setMessages(prev => [...prev, { role: "user", text: userMsg }]);
+    setChatInput("");
+    setChatLoading(true);
+
+    try {
+      const history = messages.map(m => ({
+        role: m.role === "user" ? "user" as const : "model" as const,
+        parts: [{ text: m.text }]
+      }));
+      const aiResponse = await chatWithAI(userMsg, lang, history);
+      setMessages(prev => [...prev, { role: "ai", text: aiResponse || "I'm here to help." }]);
+    } catch (error) {
+      console.error("Chat failed:", error);
+      setMessages(prev => [...prev, { role: "ai", text: "Sorry, I encountered an error. Please try again." }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-bg text-white selection:bg-gold/30">
       {/* Top Navigation */}
@@ -69,7 +95,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-2 group cursor-pointer">
             <Scale className="text-gold w-6 h-6 group-hover:rotate-12 transition-transform" />
-            <span className="font-bold text-xl tracking-tighter">JustiTalk</span>
+            <span className="font-bold text-xl tracking-tighter">{t("appName")}</span>
           </div>
           
           <div className="flex items-center gap-6">
@@ -103,10 +129,10 @@ export default function App() {
         </div>
 
         <div className="max-w-4xl mx-auto text-center animate-fade-up">
-          <h1 className="text-5xl md:text-8xl font-serif font-bold tracking-tight mb-4 leading-[0.9] text-white">
+          <h1 className="text-3xl md:text-5xl font-serif font-bold tracking-tight mb-4 leading-[0.9] text-white">
             {t("headline")}
           </h1>
-          <p className="text-lg md:text-xl text-gray-400 mb-10 max-w-2xl mx-auto font-light leading-tight">
+          <p className="text-base md:text-lg text-gray-400 mb-10 max-w-2xl mx-auto font-light leading-tight whitespace-pre-line">
             {t("slogan")}
           </p>
 
@@ -139,10 +165,19 @@ export default function App() {
                 <button 
                   onClick={handleAnalyze}
                   disabled={loading || (!input.trim() && files.length === 0)}
-                  className="premium-gradient premium-shadow px-6 py-2.5 rounded-full font-black text-[11px] uppercase tracking-widest flex items-center gap-2 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100"
+                  className="premium-gradient premium-shadow px-4 md:px-6 py-2 md:py-2.5 rounded-full font-black text-[10px] md:text-[11px] uppercase tracking-widest flex items-center gap-2 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 whitespace-nowrap"
                 >
-                  {loading ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
-                  {t("consultBtn")}
+                  {loading ? (
+                    <>
+                      <Loader2 className="animate-spin" size={14} />
+                      {t("loading")}
+                    </>
+                  ) : (
+                    <>
+                      <Send size={14} />
+                      {t("consultBtn")}
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -282,19 +317,49 @@ export default function App() {
               <button onClick={() => setChatOpen(false)} className="text-gray-500 hover:text-white"><X size={18} /></button>
             </div>
             
-            <div className="flex-1 p-6 overflow-y-auto space-y-4">
-              <div className="bg-white/5 p-4 rounded-2xl rounded-tl-none border border-white/5 max-w-[85%]">
-                <p className="text-sm text-gray-300 leading-relaxed">Welcome to JustiTalk Global Defense. How can our AI legal engine assist you today?</p>
-              </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-bg/50">
+              {messages.length === 0 && (
+                <div className="bg-white/5 p-4 rounded-2xl rounded-tl-none border border-white/5 max-w-[85%]">
+                  <p className="text-sm text-gray-300 leading-relaxed">{t("welcomeMessage")}</p>
+                </div>
+              )}
+              {messages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed ${
+                    msg.role === "user" 
+                      ? "bg-gold text-bg font-bold rounded-tr-none" 
+                      : "bg-white/5 border border-white/10 text-gray-300 rounded-tl-none"
+                  }`}>
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-white/5 border border-white/10 p-3 rounded-2xl rounded-tl-none">
+                    <Loader2 size={14} className="animate-spin text-gold" />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="p-4 bg-white/5 border-t border-white/5 flex items-center gap-2">
               <input 
                 type="text" 
-                placeholder="Message..." 
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                placeholder={t("chatInputPlaceholder")} 
                 className="flex-1 bg-transparent border-none px-2 py-1 text-sm focus:outline-none"
               />
-              <button className="p-2 text-gold hover:scale-110 transition-transform"><Send size={18} /></button>
+              <button 
+                onClick={handleSendMessage}
+                disabled={chatLoading || !chatInput.trim()}
+                className="p-2 text-gold hover:scale-110 transition-transform flex items-center gap-1 disabled:opacity-50"
+              >
+                <span className="text-[10px] uppercase font-black tracking-widest">{t("sendBtn")}</span>
+                <Send size={14} />
+              </button>
             </div>
           </motion.div>
         )}
